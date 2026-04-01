@@ -171,6 +171,48 @@ class DeploymentProviderAccountCreateRequest(BaseModel):
         check_provider_url_allowed(self.provider_url, self.provider_key)
         return self
 
+    @classmethod
+    def for_credential_verification(
+        cls,
+        *,
+        provider_key: DeploymentProviderKey,
+        provider_url: str,
+        provider_data: dict[str, Any],
+    ) -> DeploymentProviderAccountCreateRequest:
+        """Build a create-shaped request used only to run mapper/adapter credential checks."""
+        return cls(
+            name="Credential verification",
+            provider_key=provider_key,
+            provider_url=provider_url,
+            provider_data=provider_data,
+        )
+
+
+class DeploymentProviderCredentialsVerifyRequest(BaseModel):
+    """Body for ``POST /deployments/providers/verify-credentials`` (nothing is persisted)."""
+
+    model_config = {"extra": "forbid"}
+
+    provider_key: DeploymentProviderKey = Field(description="Deployment provider key.")
+    provider_url: ValidatedUrl = Field(
+        description="Provider service instance URL to verify (not stored by this endpoint).",
+    )
+    provider_data: dict[str, Any] = Field(
+        min_length=1,
+        description="Provider-specific credentials (same shape as provider account creation).",
+    )
+
+    def into_create_request(self) -> DeploymentProviderAccountCreateRequest:
+        return DeploymentProviderAccountCreateRequest.for_credential_verification(
+            provider_key=self.provider_key,
+            provider_url=self.provider_url,
+            provider_data=self.provider_data,
+        )
+
+
+class DeploymentProviderCredentialsVerifyResponse(BaseModel):
+    valid: bool = Field(default=True, description="True when the provider accepted the credential probe.")
+
 
 class DeploymentProviderAccountUpdateRequest(BaseModel):
     model_config = {"extra": "forbid"}

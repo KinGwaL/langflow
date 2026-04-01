@@ -60,6 +60,8 @@ from langflow.api.v1.schemas.deployments import (
     DeploymentProviderAccountGetResponse,
     DeploymentProviderAccountListResponse,
     DeploymentProviderAccountUpdateRequest,
+    DeploymentProviderCredentialsVerifyRequest,
+    DeploymentProviderCredentialsVerifyResponse,
     DeploymentRedeployResponse,
     DeploymentSnapshotListResponse,
     DeploymentStatusResponse,
@@ -275,6 +277,28 @@ async def create_provider_account(
     except ValueError as exc:
         _raise_http_for_provider_account_value_error(exc)
     return to_provider_account_response(provider_account)
+
+
+@router.post(
+    "/providers/verify-credentials",
+    response_model=DeploymentProviderCredentialsVerifyResponse,
+    tags=["Deployment Providers"],
+)
+async def verify_deployment_provider_credentials(
+    payload: DeploymentProviderCredentialsVerifyRequest,
+    current_user: CurrentActiveUser,
+):
+    """Check provider URL and credentials against the deployment provider without persisting an account."""
+    create_like = payload.into_create_request()
+    deployment_mapper = get_deployment_mapper(create_like.provider_key)
+    deployment_adapter = resolve_deployment_adapter(create_like.provider_key)
+    verify_input = deployment_mapper.resolve_verify_credentials(payload=create_like)
+    with handle_adapter_errors():
+        await deployment_adapter.verify_credentials(
+            user_id=current_user.id,
+            payload=verify_input,
+        )
+    return DeploymentProviderCredentialsVerifyResponse()
 
 
 @router.get("/providers", response_model=DeploymentProviderAccountListResponse, tags=["Deployment Providers"])

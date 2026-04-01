@@ -95,6 +95,7 @@ from langflow.services.adapters.deployment.watsonx_orchestrate.payloads import (
     WatsonxDeploymentUpdatePayload,
     WatsonxDeploymentUpdateResultData,
 )
+from langflow.services.adapters.deployment.watsonx_orchestrate.types import WxOClient
 from langflow.services.adapters.deployment.watsonx_orchestrate.utils import (
     _require_single_deployment_id,
     dedupe_list,
@@ -112,8 +113,6 @@ if TYPE_CHECKING:
 
     from lfx.services.settings.service import SettingsService
     from sqlalchemy.ext.asyncio import AsyncSession
-
-    from langflow.services.adapters.deployment.watsonx_orchestrate.types import WxOClient
 
 
 class WatsonxOrchestrateDeploymentService(BaseDeploymentService):
@@ -870,7 +869,13 @@ class WatsonxOrchestrateDeploymentService(BaseDeploymentService):
         user_id: IdLike,  # noqa: ARG002
         payload: VerifyCredentials,
     ) -> VerifyCredentialsResult:
-        """Verify WXO credentials by obtaining a token from the provider."""
+        """Verify WXO credentials for the target instance.
+
+        Obtains an IAM/MCSP token, then calls the wxO models listing API for the
+        configured instance URL. Token-only checks are insufficient because a
+        valid API key may authenticate while still lacking access to the tenant
+        represented by the instance URL.
+        """
         verify_slot = self.payload_schemas.verify_credentials
         if verify_slot is None:
             msg = "Required slot 'verify_credentials' is not configured."
@@ -912,6 +917,31 @@ class WatsonxOrchestrateDeploymentService(BaseDeploymentService):
             )
             raise_for_status_and_detail(
                 status_code=exc.status_code,
+                detail="Credential verification failed.",
+                message_prefix="Credential verification",
+                cause=None,
+            )
+        except Exception as exc:
+            raise DeploymentError(
+                message="Credential verification failed unexpectedly.",
+                error_code="deployment_error",
+                cause=exc,
+            ) from exc
+
+        def _probe_instance_models() -> None:
+            wxo_client = WxOClient(instance_url=payload.base_url, authenticator=authenticator)
+            wxo_client.get_models_raw()
+
+        try:
+            await asyncio.to_thread(_probe_instance_models)
+        except ClientAPIException as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            logger.error(  # noqa: TRY400
+                "Credential verification failed: wxO instance probe rejected request (status=%s)",
+                status_code,
+            )
+            raise_for_status_and_detail(
+                status_code=status_code,
                 detail="Credential verification failed.",
                 message_prefix="Credential verification",
                 cause=None,

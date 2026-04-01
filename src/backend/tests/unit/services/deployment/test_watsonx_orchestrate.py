@@ -5467,11 +5467,19 @@ async def test_verify_credentials_success(monkeypatch):
     class FakeAuthenticator:
         token_manager = FakeTokenManager()
 
+    class FakeWxOClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        def get_models_raw(self, _params=None):
+            return {}
+
     monkeypatch.setattr(
         service_module,
         "get_authenticator",
         lambda **_kwargs: FakeAuthenticator(),
     )
+    monkeypatch.setattr(service_module, "WxOClient", FakeWxOClient)
 
     svc = WatsonxOrchestrateDeploymentService(settings_service=DummySettingsService())
     payload = VerifyCredentials(
@@ -5508,6 +5516,46 @@ async def test_verify_credentials_invalid_key_raises(monkeypatch):
         provider_data={"api_key": "bad-key"},  # pragma: allowlist secret
     )
     with pytest.raises(AuthenticationError, match="Credential verification"):
+        await svc.verify_credentials(user_id="u1", payload=payload)
+
+
+@pytest.mark.anyio
+async def test_verify_credentials_instance_probe_forbidden(monkeypatch):
+    """403 from wxO models probe maps to AuthorizationError (wrong instance for key)."""
+    from ibm_watsonx_orchestrate_clients.tools.tool_client import ClientAPIException
+    from lfx.services.adapters.deployment.exceptions import AuthorizationError
+    from lfx.services.adapters.deployment.schema import VerifyCredentials
+    from requests import Response
+
+    class FakeTokenManager:
+        def get_token(self):
+            return "fake-token"
+
+    class FakeAuthenticator:
+        token_manager = FakeTokenManager()
+
+    class FailingWxOClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        def get_models_raw(self, _params=None):
+            response = Response()
+            response.status_code = 403
+            raise ClientAPIException(response=response)
+
+    monkeypatch.setattr(
+        service_module,
+        "get_authenticator",
+        lambda **_kwargs: FakeAuthenticator(),
+    )
+    monkeypatch.setattr(service_module, "WxOClient", FailingWxOClient)
+
+    svc = WatsonxOrchestrateDeploymentService(settings_service=DummySettingsService())
+    payload = VerifyCredentials(
+        base_url="https://api.us-south.wxo.cloud.ibm.com",
+        provider_data={"api_key": "valid-key"},  # pragma: allowlist secret
+    )
+    with pytest.raises(AuthorizationError, match="Credential verification"):
         await svc.verify_credentials(user_id="u1", payload=payload)
 
 
