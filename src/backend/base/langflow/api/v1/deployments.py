@@ -280,7 +280,7 @@ async def create_provider_account(
 
 
 @router.post(
-    "/providers/verify-credentials",
+    "/providers/verify",
     response_model=DeploymentProviderCredentialsVerifyResponse,
     tags=["Deployment Providers"],
 )

@@ -58,6 +58,17 @@ def test_deployment_status_path_matches_status_endpoint(deployment_routes: list[
     )
 
 
+def test_provider_verify_path_matches_verify_endpoint(deployment_routes: list[APIRoute]) -> None:
+    assert (
+        _resolve_endpoint_name(
+            deployment_routes,
+            path="/deployments/providers/verify",
+            method="POST",
+        )
+        == "verify_deployment_provider_credentials"
+    )
+
+
 def test_include_deployment_router_skips_routes_when_feature_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api_router_module.FEATURE_FLAGS, "wxo_deployments", False)
 

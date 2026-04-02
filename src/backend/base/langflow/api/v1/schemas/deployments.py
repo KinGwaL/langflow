@@ -189,7 +189,7 @@ class DeploymentProviderAccountCreateRequest(BaseModel):
 
 
 class DeploymentProviderCredentialsVerifyRequest(BaseModel):
-    """Body for ``POST /deployments/providers/verify-credentials`` (nothing is persisted)."""
+    """Body for ``POST /deployments/providers/verify`` (nothing is persisted)."""
 
     model_config = {"extra": "forbid"}
 
